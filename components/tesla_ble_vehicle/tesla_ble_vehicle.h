@@ -32,6 +32,8 @@ namespace tesla_ble_vehicle {
 
 namespace espbt = esphome::esp32_ble_tracker;
 
+class TeslaScheduleLocationPrivacySwitch;
+
 static const char *const TAG = "tesla_ble_vehicle";
 constexpr int DEFAULT_CHARGING_AMPS_MAX = 32;
 constexpr int MIN_CHARGING_LIMIT = 50;
@@ -82,6 +84,9 @@ public:
     void set_infotainment_poll_interval_awake(uint32_t interval_ms);
     void set_infotainment_poll_interval_active(uint32_t interval_ms);
     void set_infotainment_sleep_timeout(uint32_t interval_ms);
+    // Charge / departure schedules: 0 = poll only on connect (and Force update)
+    void set_schedule_poll_interval(uint32_t interval_ms);
+    void set_schedule_slots(int slots);
 
     // ==========================================================================
     // Generic sensor setters - delegates to state manager
@@ -97,6 +102,10 @@ public:
     void set_charging_switch(switch_::Switch *sw);
     void set_steering_wheel_heat_switch(switch_::Switch *sw);
     void set_sentry_mode_switch(switch_::Switch *sw);
+    void set_schedule_location_privacy(bool enabled);
+    void set_schedule_location_privacy_switch(TeslaScheduleLocationPrivacySwitch *sw) {
+      schedule_location_privacy_switch_ = sw;
+    }
     void set_charging_amps_number(number::Number *number);
     void set_charging_limit_number(number::Number *number);
 
@@ -201,6 +210,18 @@ private:
     // Polling intervals
     uint32_t vcsec_poll_interval_{10000};
     
+    // Schedule polling (read-only). Schedules change rarely; polls never wake
+    // the car and are retried every SCHEDULE_RETRY_MS until a reply arrives.
+    static constexpr uint32_t SCHEDULE_RETRY_MS = 60000;
+    TeslaScheduleLocationPrivacySwitch *schedule_location_privacy_switch_{nullptr};
+    uint32_t schedule_poll_interval_{1800000};
+    uint32_t last_schedule_poll_{0};
+    bool schedule_poll_sent_{false};
+    bool charge_schedules_received_{false};
+    bool departure_schedules_received_{false};
+    void maybe_poll_schedules_(uint32_t now);
+    void poll_schedules_(TeslaBLE::WakePolicy wake_policy, uint32_t now);
+
     // Polling state
     uint32_t last_vcsec_poll_{0};
     TeslaBLE::InfotainmentPollPolicy poll_policy_;
@@ -290,6 +311,22 @@ using TeslaSwitchBase = WithParent<switch_::Switch>;
 DEFINE_TESLA_SWITCH(TeslaChargingSwitch, set_charging_state)
 DEFINE_TESLA_SWITCH(TeslaSteeringWheelHeatSwitch, set_steering_wheel_heat)
 DEFINE_TESLA_SWITCH(TeslaSentryModeSwitch, set_sentry_mode)
+
+// Hides schedule latitude/longitude from Home Assistant while ON. A local
+// setting (never sent to the car): optimistic, restored from flash by the
+// parent's setup() (restore mode RESTORE_DEFAULT_ON).
+class TeslaScheduleLocationPrivacySwitch : public TeslaSwitchBase {
+public:
+    void restore() {
+        auto initial = this->get_initial_state_with_restore_mode();
+        this->write_state(initial.has_value() ? *initial : true);
+    }
+protected:
+    void write_state(bool state) override {
+        if (parent_) parent_->set_schedule_location_privacy(state);
+        this->publish_state(state);
+    }
+};
 
 class TeslaChargingAmpsNumber : public WithParent<number::Number> {
 protected:

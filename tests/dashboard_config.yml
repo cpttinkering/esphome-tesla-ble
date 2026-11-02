@@ -1,7 +1,8 @@
 # Mirrors the configuration materialized by ESPHome Device Builder for an adopted device.
 substitutions:
-  # Exercise an immutable ref used for both the remote package and components.
-  tesla_ble_ref: a38ccb337763c0921c853ee29b9da1c44f036469
+  # Ref used for both the remote package and components.
+  # Re-pin to an immutable commit SHA of this fork once the schedule changes are on main.
+  tesla_ble_ref: main
   name: tesla-ble-dashboard-test
   friendly_name: Tesla BLE Dashboard Test
   ble_mac_address: !secret test_vehicle_ble_mac

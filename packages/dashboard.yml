@@ -1,15 +1,18 @@
 # This package deliberately excludes esphome identity, API, and Wi-Fi credentials.
 # ESPHome Device Builder owns those settings in each device's local configuration.
 substitutions:
-  # Set by the Device Builder configuration to a branch, tag, or commit SHA.
-  tesla_ble_ref: main
   vcsec_poll_interval: "10"
   infotainment_poll_interval_awake: "30"
   infotainment_poll_interval_active: "10"
   infotainment_sleep_timeout: "660"
+  schedule_poll_interval: "1800"  # charge/departure schedules, seconds (0 = on connect only)
+  schedule_slots: "5"             # JSON slot sensors per schedule type (0-16)
 
 packages:
+  # Source locations (tesla_ble_ref, repo and library URLs) live in repository.yml.
+  repository: !include repository.yml
   board: !include board.yml
+  library: !include library.git.yml
   common: !include common.yml
   project: !include project.yml
   client: !include client.yml

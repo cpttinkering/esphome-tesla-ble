@@ -43,6 +43,7 @@ TeslaUnlatchDriverDoorButton = tesla_ble_vehicle_ns.class_("TeslaUnlatchDriverDo
 TeslaChargingSwitch = tesla_ble_vehicle_ns.class_("TeslaChargingSwitch", switch.Switch)
 TeslaSteeringWheelHeatSwitch = tesla_ble_vehicle_ns.class_("TeslaSteeringWheelHeatSwitch", switch.Switch)
 TeslaSentryModeSwitch = tesla_ble_vehicle_ns.class_("TeslaSentryModeSwitch", switch.Switch)
+TeslaScheduleLocationPrivacySwitch = tesla_ble_vehicle_ns.class_("TeslaScheduleLocationPrivacySwitch", switch.Switch)
 
 # Custom lock classes
 TeslaDoorsLock = tesla_ble_vehicle_ns.class_("TeslaDoorsLock", lock.Lock)
@@ -87,6 +88,13 @@ CONF_VCSEC_POLL_INTERVAL = "vcsec_poll_interval"
 CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE = "infotainment_poll_interval_awake" 
 CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE = "infotainment_poll_interval_active"
 CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
+
+# Schedule configuration constants
+CONF_SCHEDULE_POLL_INTERVAL = "schedule_poll_interval"  # seconds, 0 = on connect only
+CONF_SCHEDULE_SLOTS = "schedule_slots"  # JSON slot sensors per schedule type
+DEFAULT_SCHEDULE_POLL_INTERVAL = 1800
+DEFAULT_SCHEDULE_SLOTS = 5
+MAX_SCHEDULE_SLOTS = 16  # matches TeslaBLE::MAX_SCHEDULES
 
 # =============================================================================
 # ENTITY DEFINITIONS - Add new sensors/controls here!
@@ -133,6 +141,12 @@ BINARY_SENSORS = [
     {"id": "window_passenger_front", "name": "Window Passenger Front", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
     {"id": "window_passenger_rear", "name": "Window Passenger Rear", "icon": "mdi:car-door", "device_class": "window", "disabled_by_default": True},
 
+    # Schedules: active / next window
+    {"id": "charge_schedule_next_enabled", "name": "Next Charge Schedule Enabled", "icon": "mdi:calendar-check"},
+    {"id": "departure_schedule_next_enabled", "name": "Next Departure Enabled", "icon": "mdi:calendar-check"},
+    # Legacy single schedule (older car UI); disabled by default
+    {"id": "legacy_scheduled_charging_pending", "name": "Legacy Scheduled Charging Pending", "icon": "mdi:calendar-clock", "disabled_by_default": True},
+    {"id": "legacy_departure_preconditioning", "name": "Legacy Departure Preconditioning", "icon": "mdi:car-defrost-front", "disabled_by_default": True},
 ]
 
 SENSORS = [
@@ -151,6 +165,10 @@ SENSORS = [
     {"id": "charging_rate", "name": "Charging Rate", "icon": "mdi:speedometer", "device_class": "speed", "unit": "mph", "accuracy_decimals": 1},
     {"id": "energy_added", "name": "Energy Added", "icon": "mdi:battery-charging", "device_class": "energy", "unit": "kWh", "accuracy_decimals": 1},
     {"id": "time_to_full", "name": "Time to Full", "icon": "mdi:clock-outline", "device_class": "duration", "unit": "min"},
+
+    # Schedule counts
+    {"id": "charge_schedule_count", "name": "Charge Schedules", "icon": "mdi:calendar-multiple", "unit": "", "accuracy_decimals": 0},
+    {"id": "departure_schedule_count", "name": "Departure Schedules", "icon": "mdi:calendar-multiple", "unit": "", "accuracy_decimals": 0},
     
     # Climate state sensors
     {"id": "outside_temp", "name": "Outside Temperature", "icon": "mdi:thermometer", "device_class": "temperature", "unit": "°C", "accuracy_decimals": 1},
@@ -173,6 +191,23 @@ TEXT_SENSORS = [
     {"id": "software_update", "name": "Software Update", "icon": "mdi:cellphone-arrow-down"},
     {"id": "software_update_version", "name": "Software Update Version", "icon": "mdi:information-outline", "entity_category": "diagnostic"},
     {"id": "steering_wheel_heat_mode", "name": "Steering Heat Mode", "icon": "mdi:steering", "entity_category": "diagnostic"},
+    # Schedules (times are car-local "HH:MM"; "none" when not set)
+    {"id": "charge_schedule_summary", "name": "Charge Schedule", "icon": "mdi:calendar-clock"},
+    {"id": "charge_schedule_next_name", "name": "Next Charge Schedule", "icon": "mdi:calendar-star"},
+    {"id": "charge_schedule_next_start", "name": "Next Charge Start", "icon": "mdi:clock-start"},
+    {"id": "charge_schedule_next_end", "name": "Next Charge End", "icon": "mdi:clock-end"},
+    {"id": "charge_schedule_next_days", "name": "Next Charge Days", "icon": "mdi:calendar-week"},
+    {"id": "departure_schedule_summary", "name": "Departure Schedule", "icon": "mdi:car-clock"},
+    {"id": "departure_schedule_next_name", "name": "Next Departure", "icon": "mdi:calendar-star"},
+    {"id": "departure_schedule_next_time", "name": "Next Departure Time", "icon": "mdi:clock-outline"},
+    {"id": "departure_schedule_next_days", "name": "Next Departure Days", "icon": "mdi:calendar-week"},
+    # Legacy single schedule (older car UI); disabled by default
+    {"id": "legacy_scheduled_charging_mode", "name": "Legacy Scheduled Charging Mode", "icon": "mdi:calendar-clock", "disabled_by_default": True},
+    {"id": "legacy_scheduled_charging_start_time", "name": "Legacy Scheduled Charging Start", "icon": "mdi:clock-start", "disabled_by_default": True},
+    {"id": "legacy_scheduled_departure_time", "name": "Legacy Scheduled Departure", "icon": "mdi:car-clock", "disabled_by_default": True},
+    {"id": "legacy_departure_preconditioning_days", "name": "Legacy Departure Preconditioning Days", "icon": "mdi:calendar-week", "disabled_by_default": True},
+    {"id": "legacy_off_peak_charging_days", "name": "Legacy Off-Peak Charging Days", "icon": "mdi:calendar-week", "disabled_by_default": True},
+    {"id": "legacy_off_peak_hours_end_time", "name": "Legacy Off-Peak End", "icon": "mdi:clock-end", "disabled_by_default": True},
     {"id": "last_command", "name": "Last Command", "icon": "mdi:history", "entity_category": "diagnostic", "disabled_by_default": True, "setter": "set_last_command_text_sensor"},
 ]
 
@@ -194,6 +229,21 @@ SWITCHES = [
     {"id": "charging", "name": "Charger", "class": TeslaChargingSwitch, "setter": "set_charging_switch", "icon": "mdi:ev-station"},
     {"id": "steering_wheel_heat", "name": "Heated Steering", "class": TeslaSteeringWheelHeatSwitch, "setter": "set_steering_wheel_heat_switch", "icon": "mdi:steering"},
     {"id": "sentry_mode", "name": "Sentry Mode", "class": TeslaSentryModeSwitch, "setter": "set_sentry_mode_switch", "icon": "mdi:shield-car"},
+]
+
+# Local settings (never sent to the car). Restored from flash by the parent's
+# setup(); "restore" sets the first-boot default.
+SETTING_SWITCHES = [
+    {"id": "schedule_location_privacy", "name": "Schedule Location Privacy", "class": TeslaScheduleLocationPrivacySwitch,
+     "setter": "set_schedule_location_privacy_switch", "icon": "mdi:map-marker-off", "entity_category": "diagnostic", "restore": "RESTORE_DEFAULT_ON"},
+]
+
+# One JSON text sensor per schedule slot ("" when the slot is unused). Home
+# Assistant merges them into a single entity with a list attribute, see
+# home-assistant/tesla_ble_schedules.yaml. Count set by schedule_slots.
+SCHEDULE_SLOT_TYPES = [
+    {"prefix": "charge_schedule_slot_", "name": "Charge Schedule Slot", "icon": "mdi:calendar-text"},
+    {"prefix": "departure_schedule_slot_", "name": "Departure Schedule Slot", "icon": "mdi:calendar-text"},
 ]
 
 # Lock entities (combined sensor + control)
@@ -320,6 +370,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE, default=30): cv.int_range(min=10, max=600), 
             cv.Optional(CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE, default=10): cv.int_range(min=5, max=120),
             cv.Optional(CONF_INFOTAINMENT_SLEEP_TIMEOUT, default=660): cv.int_range(min=60, max=3600),
+            # Schedules (seconds; 0 = only on connect and on "Force data update")
+            cv.Optional(CONF_SCHEDULE_POLL_INTERVAL, default=DEFAULT_SCHEDULE_POLL_INTERVAL): cv.Any(
+                cv.one_of(0, int=True), cv.int_range(min=60, max=86400)),
+            cv.Optional(CONF_SCHEDULE_SLOTS, default=DEFAULT_SCHEDULE_SLOTS): cv.int_range(min=0, max=MAX_SCHEDULE_SLOTS),
         },
     )
     .extend(cv.polling_component_schema("10s"))
@@ -415,6 +469,26 @@ async def create_switch(var, definition):
     return _attach(var, await switch.new_switch(config), definition)
 
 
+async def create_setting_switch(var, definition):
+    """Create a local setting switch; the parent restores its state in setup()."""
+    config = _base_config(definition, definition["class"], "switch")
+    config[CONF_RESTORE_MODE] = switch.RESTORE_MODES[definition.get("restore", "RESTORE_DEFAULT_OFF")]
+    return _attach(var, await switch.new_switch(config), definition)
+
+
+async def create_schedule_slots(var, slots):
+    """Create the per-slot JSON text sensors (diagnostic) for both schedule types."""
+    for slot_type in SCHEDULE_SLOT_TYPES:
+        for index in range(1, slots + 1):
+            definition = {
+                "id": f"{slot_type['prefix']}{index}",
+                "name": f"{slot_type['name']} {index}",
+                "icon": slot_type["icon"],
+                "entity_category": "diagnostic",
+            }
+            await create_text_sensor(var, definition)
+
+
 async def create_number(var, definition, config):
     """Create a number and register with TeslaBLEVehicle."""
     max_val = definition["max"]
@@ -500,6 +574,8 @@ async def to_code(config):
     cg.add(var.set_infotainment_poll_interval_awake(config[CONF_INFOTAINMENT_POLL_INTERVAL_AWAKE] * 1000))
     cg.add(var.set_infotainment_poll_interval_active(config[CONF_INFOTAINMENT_POLL_INTERVAL_ACTIVE] * 1000))
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
+    cg.add(var.set_schedule_poll_interval(config[CONF_SCHEDULE_POLL_INTERVAL] * 1000))
+    cg.add(var.set_schedule_slots(config[CONF_SCHEDULE_SLOTS]))
     
     for creators in (
         (BINARY_SENSORS, create_binary_sensor),
@@ -516,6 +592,10 @@ async def to_code(config):
 
     for definition in NUMBERS:
         await create_number(var, definition, config)
+
+    for definition in SETTING_SWITCHES:
+        await create_setting_switch(var, definition)
+    await create_schedule_slots(var, config[CONF_SCHEDULE_SLOTS])
 
     await create_climate_entity(var, CLIMATE)
 

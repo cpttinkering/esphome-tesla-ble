@@ -51,6 +51,8 @@ void TeslaBLEVehicle::setup() {
   write_uuid_ = espbt::ESPBTUUID::from_raw(WRITE_UUID);
   initialize_managers();
   restore_charging_amps_max_();
+  if (schedule_location_privacy_switch_)
+    schedule_location_privacy_switch_->restore();
 
   if (vin_.empty()) {
     ESP_LOGE(TAG, "VIN not configured - component will not function properly");
@@ -120,6 +122,16 @@ void TeslaBLEVehicle::initialize_managers() {
         state_manager_.update_software_update_state(s, version);
       });
 
+  vehicle_->set_charge_schedule_state_callback([this](const TeslaBLE::ChargeScheduleList &list) {
+    charge_schedules_received_ = true;
+    state_manager_.update_charge_schedules(list);
+  });
+
+  vehicle_->set_preconditioning_schedule_state_callback([this](const TeslaBLE::PreconditionScheduleList &list) {
+    departure_schedules_received_ = true;
+    state_manager_.update_departure_schedules(list);
+  });
+
   ESP_LOGD(TAG, "All components initialized");
 }
 
@@ -177,6 +189,34 @@ void TeslaBLEVehicle::update() {
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     poll_policy_.on_poll(now);
   }
+
+  maybe_poll_schedules_(now);
+}
+
+// Schedules are polled once per connection (as soon as the car is awake) and
+// then every schedule_poll_interval. A poll without a reply (car fell asleep,
+// BLE hiccup) is retried after SCHEDULE_RETRY_MS. Never wakes the car.
+void TeslaBLEVehicle::maybe_poll_schedules_(uint32_t now) {
+  if (state_manager_.is_asleep())
+    return;
+  const bool missing = !charge_schedules_received_ || !departure_schedules_received_;
+  const uint32_t since = now - last_schedule_poll_;
+  const bool due = !schedule_poll_sent_ || (missing && since >= SCHEDULE_RETRY_MS) ||
+                   (schedule_poll_interval_ > 0 && since >= schedule_poll_interval_);
+  if (due)
+    poll_schedules_(TeslaBLE::WakePolicy::NO_WAKE_SKIP, now);
+}
+
+void TeslaBLEVehicle::poll_schedules_(TeslaBLE::WakePolicy wake_policy, uint32_t now) {
+  if (!vehicle_)
+    return;
+  ESP_LOGI(TAG, "Polling charge and departure schedules");
+  charge_schedules_received_ = false;
+  departure_schedules_received_ = false;
+  vehicle_->charge_schedule_poll(wake_policy);
+  vehicle_->preconditioning_schedule_poll(wake_policy);
+  last_schedule_poll_ = now;
+  schedule_poll_sent_ = true;
 }
 
 void TeslaBLEVehicle::dump_config() {
@@ -189,6 +229,8 @@ void TeslaBLEVehicle::dump_config() {
                      "ms, Active=%" PRIu32 "ms",
                  vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
                  poll_policy_.active_interval_ms());
+  ESP_LOGCONFIG(TAG, "  Schedules: interval=%" PRIu32 "ms (0 = on connect only), location privacy=%s",
+                schedule_poll_interval_, YESNO(state_manager_.schedule_location_privacy()));
 }
 
 // =============================================================================
@@ -274,6 +316,20 @@ void TeslaBLEVehicle::set_infotainment_sleep_timeout(uint32_t interval_ms) {
   ESP_LOGD(TAG, "Setting infotainment sleep timeout: %" PRIu32 " ms",
            interval_ms);
   poll_policy_.set_sleep_timeout_ms(interval_ms);
+}
+
+void TeslaBLEVehicle::set_schedule_poll_interval(uint32_t interval_ms) {
+  ESP_LOGD(TAG, "Setting schedule poll interval: %" PRIu32 " ms", interval_ms);
+  schedule_poll_interval_ = interval_ms;
+}
+
+void TeslaBLEVehicle::set_schedule_slots(int slots) {
+  const size_t count = slots > 0 ? static_cast<size_t>(slots) : 0;
+  state_manager_.set_schedule_slots(count, count);
+}
+
+void TeslaBLEVehicle::set_schedule_location_privacy(bool enabled) {
+  state_manager_.set_schedule_location_privacy(enabled);
 }
 
 // =============================================================================
@@ -543,6 +599,7 @@ void TeslaBLEVehicle::force_update() {
     vehicle_->vcsec_poll();
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
     vehicle_->software_update_poll(TeslaBLE::WakePolicy::WAKE_IF_NEEDED);
+    poll_schedules_(TeslaBLE::WakePolicy::WAKE_IF_NEEDED, now);
   }
 }
 
@@ -918,6 +975,8 @@ void TeslaBLEVehicle::handle_connection_lost() {
   this->cancel_timeout("command-failed-warning");
 
   last_vcsec_poll_ = 0;
+  // Re-read schedules on the next connection (they may have changed meanwhile).
+  schedule_poll_sent_ = false;
   if (key_rejected_) {
     handle_key_not_paired();
   } else {

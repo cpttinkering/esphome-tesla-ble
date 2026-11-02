@@ -16,6 +16,10 @@ tesla_ble_vehicle:
   infotainment_poll_interval_active: $infotainment_poll_interval_active # Data polling when charging/sentry mode (more responsive)
   infotainment_sleep_timeout: $infotainment_sleep_timeout  # Idle time before polls stop waking the car (letting it sleep)
 
+  # Charge / departure schedules (read-only, never wakes the car)
+  schedule_poll_interval: $schedule_poll_interval  # Re-read interval; also read on every (re)connect
+  schedule_slots: $schedule_slots                  # Per-schedule JSON slot sensors for Home Assistant
+
 # BLE sensors from the standard ble_client platform
 sensor:
   - platform: ble_client

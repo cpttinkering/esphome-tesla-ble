@@ -13,7 +13,8 @@ ESPHome component for Tesla BLE vehicle control using ESP32 boards (M5Stack Nano
 - tesla_ble_vehicle: Main vehicle control (sensors, switches, charging, climate, locks)
 - tesla_ble_listener: BLE vehicle discovery (find MAC address by VIN)
 
-External Tesla BLE library (yoziru/tesla-ble) provides low-level BLE protocol implementation.
+External Tesla BLE library (cpttinkering/tesla-ble fork, v6.4+) provides low-level BLE protocol implementation.
+Source locations (repo URLs, refs, local paths) live only in packages/repository.yml.
 Session keys stored in ESP NVS flash.
 
 Structure:
@@ -45,6 +46,8 @@ Error handling: Check pointers before use. Return bool for success/failure helpe
   the shared library's include/state_text.h and src/state_text.cpp, using generated protobuf enums/tags
 - Sensors defined in __init__.py SENSORS/BINARY_SENSORS/TEXT_SENSORS lists
 - Sensor values published in vehicle_state_manager.cpp update methods
+- Schedules: library extracts lists (schedule_state.h); schedule_format.h (pure, host-tested) formats
+  them within HA's 255-char state limit; slot sensors are generated from SCHEDULE_SLOT_TYPES
 - Commands use TeslaBLEVehicle::track() (tesla-ble OperationResult tracking)
 - The shared Vehicle delays state refreshes 1.5 seconds and coalesces them by state group;
   disconnect clears deferred refreshes, and pending_command_count includes them.

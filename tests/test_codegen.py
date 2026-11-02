@@ -36,6 +36,7 @@ ENTITY_LISTS = {
     "SELECTS": {"required": ("id", "name", "class", "options")},
     "NUMBERS": {"required": ("id", "name", "class", "setter")},
     "CLIMATE": {"required": ("id", "name", "class", "setter")},
+    "SETTING_SWITCHES": {"required": ("id", "name", "class")},
 }
 
 # These lists are published from C++; the other lists are controls created by

@@ -2,14 +2,5 @@ esp32:
   board: $board
   variant: $variant
   flash_size: $flash_size
-  # framework type defaults to esp-idf (only the managed components list
-  # below needs the block to exist).
-  framework:
-    components:
-      # Requires tesla-ble v6.0.0+ (state_text, polling policy and action
-      # result callbacks moved into the library).
-      # For local development against a checkout, replace source/ref with:
-      #   path: /path/to/tesla-ble
-      - name: tesla-ble
-        source: https://github.com/yoziru/tesla-ble.git
-        ref: v6.2.0
+  # The tesla-ble library (ESP-IDF component) is added by library.git.yml or
+  # library.local.yml, so the same board settings serve both install methods.

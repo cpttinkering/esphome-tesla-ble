@@ -16,6 +16,7 @@
 #include <type_traits>
 #include <car_server.pb.h>
 #include <vcsec.pb.h>
+#include <schedule_state.h>
 #if __has_include(<charging_power.h>)
 #include <charging_power.h>
 #endif
@@ -112,6 +113,17 @@ public:
     void update_closures_state(const CarServer_ClosuresState& closures_state);
     void update_software_update_state(const CarServer_SoftwareUpdateState& update_state,
                                       const std::string& version);
+
+    // Schedules (read-only). Lists are cached so a privacy toggle can re-render them.
+    void update_legacy_schedule(const CarServer_ChargeState& charge_state);
+    void update_charge_schedules(const TeslaBLE::ChargeScheduleList& list);
+    void update_departure_schedules(const TeslaBLE::PreconditionScheduleList& list);
+    void set_schedule_location_privacy(bool enabled);
+    bool schedule_location_privacy() const { return schedule_location_privacy_; }
+    void set_schedule_slots(size_t charge_slots, size_t departure_slots) {
+        charge_schedule_slots_ = charge_slots;
+        departure_schedule_slots_ = departure_slots;
+    }
     
     // ==========================================================================
     // Direct state updates (for specific use cases)
@@ -194,6 +206,18 @@ private:
     // ==========================================================================
     bool is_charging_{false};
     int charging_amps_max_{0};
+
+    // Schedule state
+    TeslaBLE::ChargeScheduleList charge_schedules_;
+    TeslaBLE::PreconditionScheduleList departure_schedules_;
+    bool has_charge_schedules_{false};
+    bool has_departure_schedules_{false};
+    bool schedule_location_privacy_{true};  // privacy first; the HA switch restores the user's choice
+    size_t charge_schedule_slots_{0};
+    size_t departure_schedule_slots_{0};
+    void publish_charge_schedules_();
+    void publish_departure_schedules_();
+    void publish_schedule_slot_(const std::string& prefix, size_t index, const std::string& json, bool present);
     
     // Climate state tracking
     float current_inside_temp_{NAN};

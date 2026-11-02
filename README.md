@@ -1,5 +1,12 @@
 # ESPHome Tesla BLE
 
+> [!NOTE]
+> **cpttinkering fork** of [yoziru/esphome-tesla-ble](https://github.com/yoziru/esphome-tesla-ble).
+> Adds read-only charge and departure schedules (see [Schedules](#charge-and-departure-schedules)),
+> configurable source repositories ([`packages/repository.yml`](./packages/repository.yml)) and an
+> [offline / local installation](#offline--local-installation). Requires the matching
+> [cpttinkering/tesla-ble](https://github.com/cpttinkering/tesla-ble) library (v6.4+).
+
 > [!TIP]
 > **Using Home Assistant?** [Tesla BLE for Home Assistant](https://github.com/yoziru/ha-tesla-ble)
 > provides vehicle sensors and controls through HA's local Bluetooth adapter or a
@@ -42,6 +49,7 @@ The generic package targets the classic ESP32 (`esp32dev`). Do not use it for ES
 - [x] Charging sensors: battery level, charge rate, energy added, time to full, charger phases
 - [x] Software update: status and version sensors, install and cancel buttons (polled every 5th infotainment cycle)
 - [x] Climate controls: per-seat climate, cabin overheat protection and temperature, steering heat mode, sunroof position cover
+- [x] Charge and departure schedules (read-only): next window, counts, summaries, every schedule as JSON for Home Assistant, legacy single-schedule fields, location privacy switch
 
 **Charger Power Estimated** uses shared phase detection when available, otherwise
 reported power. **Charger Phases** stays raw; **Charger Effective Phases** is
@@ -80,8 +88,8 @@ substitutions:
 
 ```yaml
 packages:
-  yoziru.esphome-tesla-ble:
-    url: https://github.com/yoziru/esphome-tesla-ble.git
+  cpttinkering.esphome-tesla-ble:
+    url: https://github.com/cpttinkering/esphome-tesla-ble.git
     ref: ${tesla_ble_ref}
     files: [tesla-ble-m5stack-nanoc6.dashboard.yml]
 ```
@@ -93,6 +101,25 @@ Use `tesla-ble-m5stack-atoms3.dashboard.yml` for an AtomS3 or `tesla-ble-esp32-g
 **Wrong board?** If the upload reaches 100% but ends with `Finishing update failed`, the board file doesn't match your chip (e.g. NanoC6 firmware on an AtomS3). Switch `files:` to the `.dashboard.yml` for your hardware and install again.
 
 Set `tesla_ble_ref` once to test a branch, tag, or commit SHA. It selects both the YAML package and the custom C++ components. Local CLI builds need no override because they use the current checkout's `components/` directory.
+
+#### Source repositories
+
+The package fetches its C++ components and the `tesla-ble` library from the locations in
+[`packages/repository.yml`](./packages/repository.yml). Nothing else in the packages names a
+repository. To use another fork or pin versions, override the values in the top-level
+`substitutions:` of your device YAML; top-level substitutions always win over package
+defaults, so updating this repository never overwrites them:
+
+```yaml
+substitutions:
+  tesla_ble_ref: main                                                    # this repository: branch, tag or SHA
+  tesla_ble_repo_url: https://github.com/cpttinkering/esphome-tesla-ble.git
+  tesla_ble_library_url: https://github.com/cpttinkering/tesla-ble.git
+  tesla_ble_library_ref: v6.4                                            # library: tag or SHA
+```
+
+The one reference you write yourself is the `url:` of the remote package in your device
+YAML (ESPHome needs it to fetch the packages in the first place).
 
 The first flash needs the generated name, Wi-Fi, and API settings plus the two vehicle secrets above. See [Finding the BLE MAC](#finding-the-ble-mac) if you do not have the MAC yet.
 
@@ -110,8 +137,8 @@ substitutions:
   tesla_vin: !secret tesla_vin
 
 packages:
-  yoziru.esphome-tesla-ble:
-    url: https://github.com/yoziru/esphome-tesla-ble.git
+  cpttinkering.esphome-tesla-ble:
+    url: https://github.com/cpttinkering/esphome-tesla-ble.git
     ref: ${tesla_ble_ref}
     files: [packages/dashboard.yml]
 
@@ -135,8 +162,8 @@ substitutions:
   tesla_vin: !secret tesla_vin
 
 packages:
-  yoziru.esphome-tesla-ble:
-    url: https://github.com/yoziru/esphome-tesla-ble.git
+  cpttinkering.esphome-tesla-ble:
+    url: https://github.com/cpttinkering/esphome-tesla-ble.git
     ref: ${tesla_ble_ref}
     files: [tesla-ble-m5stack-nanoc6.dashboard.yml]
 
@@ -161,6 +188,51 @@ Secret names are local to each user's dashboard. If yours differ, keep `ble_mac_
 For multiple vehicles, create one ESPHome device per vehicle and map each device's substitutions to distinct secrets. For example, the second device can use `ble_mac_address: !secret model_y_ble_mac_address` and `tesla_vin: !secret model_y_tesla_vin`; the package and board configuration stay the same.
 
 Or copy [`tesla-ble.example.yml`](./tesla-ble.example.yml) as a starting point for custom configs.
+
+### Offline / local installation
+
+Builds without fetching this repository or the library from GitHub, using unpacked copies
+in your ESPHome config folder. (ESP-IDF still downloads its toolchain and the `nanopb`
+component on the first build, as for any ESPHome ESP32 device.)
+
+1. Download both repositories as `.zip` (GitHub: **Code** → **Download ZIP**, or a release
+   archive) and unpack them next to your device YAML, so you get, in the Home Assistant
+   ESPHome add-on:
+
+   ```text
+   /config/esphome/
+   ├── tesla-ble-5b1980.yaml        # your device
+   ├── esphome-tesla-ble/           # this repository (README.md at this level)
+   └── tesla-ble/                   # the library (library.json at this level)
+   ```
+
+   GitHub zips unpack to `<repo>-<branch>/`; rename the folders as above or set the paths
+   in step 2.
+
+2. In your device YAML, replace the remote package with the local board file. Paths
+   default to the layout above; override them only if yours differ (absolute paths):
+
+   ```yaml
+   substitutions:
+     # tesla_ble_local_path: /config/esphome/esphome-tesla-ble
+     # tesla_ble_library_path: /config/esphome/tesla-ble
+     ble_mac_address: !secret tesla_ble_mac_address
+     tesla_vin: !secret tesla_vin
+
+   packages:
+     tesla_ble: !include esphome-tesla-ble/tesla-ble-m5stack-nanoc6.local.yml
+   ```
+
+   Use `tesla-ble-m5stack-atoms3.local.yml` or `tesla-ble-esp32-generic.local.yml` for the
+   other boards. Remove `tesla_ble_ref`; it is not used by local builds.
+
+3. Save and **Install**. To update, replace both folders with the new versions and install
+   again. Your device YAML and `secrets.yaml` are outside them and stay untouched.
+
+How it works: `*.local.yml` → `packages/dashboard.local.yml`, which is identical to
+`packages/dashboard.yml` except for two includes: `external_components.local.yml`
+(`type: local` components from `${tesla_ble_local_path}/components`) and
+`library.local.yml` (the ESP-IDF component from `${tesla_ble_library_path}` instead of git).
 
 ### CLI
 
@@ -214,6 +286,61 @@ tesla_ble_vehicle:
 The system only polls infotainment data during an 11-minute wake window, then lets the car sleep. Active charging and sentry mode keep it awake for continuous updates. A car that is merely left unlocked, or that reports user presence because a phone is in range, is treated as idle — the integration backs off and lets it sleep regardless. VCSEC status polling is low-power and does not affect vehicle sleep.
 
 Successful controls refresh the affected state after 1.5 seconds. Repeated controls coalesce that refresh; it does not wake a sleeping car and is cancelled on disconnect.
+
+### Charge and departure schedules
+
+Read-only. Schedules are read on every (re)connect as soon as the car is awake, then every
+`schedule_poll_interval`, and on **Force data update**. These polls never wake the car; a
+poll without a reply is retried after a minute.
+
+```yaml
+substitutions:
+  schedule_poll_interval: "1800"  # seconds: 0 (connect/force update only) or 60-86400, default 30 min
+  schedule_slots: "5"             # JSON slot sensors per schedule type: 0-16, default 5
+```
+
+| Entity | Content |
+|--------|---------|
+| Charge Schedule / Departure Schedule | Summary, e.g. `2 of 3 enabled; next: Home night 23:00-07:00 Weekdays` |
+| Charge Schedules / Departure Schedules | Number of configured schedules |
+| Next Charge Schedule, Start, End, Days, Enabled | The car's active/next charge window |
+| Next Departure, Time, Days, Enabled | The car's active/next departure |
+| Charge/Departure Schedule Slot 1..N (diagnostic) | One schedule each as JSON, empty when unused |
+| Schedule Location Privacy (diagnostic switch) | **On by default**: slots omit each schedule's latitude/longitude |
+| Legacy Scheduled Charging Mode, Start, Pending; Legacy Scheduled Departure, Preconditioning, Days; Legacy Off-Peak Days, End | The older single-schedule fields, disabled by default |
+
+Times are the car's local time as `HH:MM`, or `none` when not set. Days: `Every day`,
+`Weekdays`, `Weekend`, `Once` (one-time) or a list such as `Mon,Wed`.
+
+**One entity with all schedules as attributes:** ESPHome entities cannot carry attributes,
+so copy [`home-assistant/tesla_ble_schedules.yaml`](./home-assistant/tesla_ble_schedules.yaml)
+into your Home Assistant `packages/` folder. It creates **Tesla Charge Schedules** and
+**Tesla Departure Schedules**: the state is the number of schedules and the `schedules`
+attribute holds the list, e.g.
+
+```yaml
+schedules:
+  - {slot: 1, id: 1700000000, name: Home night, days: "Mon,Tue,Wed,Thu,Fri",
+     start: "23:00", end: "07:00", one_time: false, enabled: true}
+```
+
+Departure schedules use `departure: "07:45"` instead of `start`/`end`. With the privacy
+switch off, `lat`/`lon` are added; schedule names can still reveal places.
+
+<details>
+<summary>How it works</summary>
+
+The car reports schedules over BLE in `CarServer.VehicleData.charge_schedule_state` and
+`preconditioning_schedule_state` (vehicle-command `GetChargeScheduleState` /
+`GetPreconditioningScheduleState`). The nanopb structs leave the schedule lists and names
+as callbacks, so the library decodes them from the raw response into bounded structs (at
+most 16 schedules, 32-byte names; `schedule_state.h`). This component formats them
+(`schedule_format.h`) within Home Assistant's 255-character state limit; a name that would
+overflow a slot is shortened, and a slot that still cannot fit is logged as an error and
+left empty. A privacy toggle re-renders the cached schedules immediately, without polling
+the car. The legacy fields come with every charge-state poll and cost no extra BLE traffic.
+`days_of_week` is a bitmask, bit 0 = Sunday through bit 6 = Saturday.
+</details>
 
 ## Usage
 

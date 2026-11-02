@@ -1,0 +1,20 @@
+# Where the firmware sources come from - the single place to change them.
+#
+# Every value can be overridden from the top-level `substitutions:` of your
+# device YAML (top-level substitutions always win over package defaults), so a
+# redeploy of this repository never overwrites your choice.
+substitutions:
+  # ESPHome components and YAML packages (this repository).
+  tesla_ble_repo_url: https://github.com/cpttinkering/esphome-tesla-ble.git
+  # Branch, tag or commit SHA of this repository.
+  tesla_ble_ref: main
+  # Shared C++ protocol library (ESP-IDF component).
+  tesla_ble_library_url: https://github.com/cpttinkering/tesla-ble.git
+  tesla_ble_library_ref: v6.4
+  # Offline / local builds (packages/dashboard.local.yml): unpacked copies of
+  # both repositories. Absolute paths; the defaults match the Home Assistant
+  # ESPHome add-on, where your device YAML lives in /config/esphome.
+  tesla_ble_local_path: /config/esphome/esphome-tesla-ble
+  tesla_ble_library_path: /config/esphome/tesla-ble
+  # ESPHome project identity shown in Home Assistant (author.name).
+  tesla_ble_project_name: cpttinkering.esphome-tesla-ble

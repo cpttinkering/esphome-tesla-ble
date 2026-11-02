@@ -1,0 +1,59 @@
+# Home Assistant package: one entity per schedule type, holding every
+# configured schedule as a list in its `schedules` attribute.
+#
+# The ESPHome device publishes each schedule as compact JSON in its own
+# diagnostic "Charge/Departure Schedule Slot N" sensor (ESPHome entities
+# cannot carry attributes). These template sensors merge those slots.
+#
+# Install: copy to /config/packages/ and enable packages in configuration.yaml:
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# Several Tesla BLE devices? Replace ".*" in SLOT patterns below with the
+# device's entity prefix, e.g. 'sensor\.tesla_ble_5b1980_charge_schedule_slot_\d+$'.
+#
+# Each schedule object:
+#   charge:    {slot, id, name, days, start, end, one_time, enabled[, lat, lon]}
+#   departure: {slot, id, name, days, departure, one_time, enabled[, lat, lon]}
+# days: "Mon,Tue,..."; times: car-local "HH:MM" or "none".
+# lat/lon only appear while the device's "Schedule Location Privacy" switch is off.
+#
+# Templates that iterate a whole domain are re-rendered at most once a minute.
+
+template:
+  - sensor:
+      - name: "Tesla Charge Schedules"
+        unique_id: tesla_ble_charge_schedules
+        icon: mdi:calendar-multiple
+        state: >
+          {{ states.sensor
+             | selectattr('entity_id', 'match', 'sensor\..*_charge_schedule_slot_\d+$')
+             | selectattr('state', 'match', '\{')
+             | list | count }}
+        attributes:
+          schedules: >
+            {% set ns = namespace(items=[]) %}
+            {% for s in states.sensor
+                 if s.entity_id is match('sensor\..*_charge_schedule_slot_\d+$')
+                 and s.state is match('\{') %}
+              {% set ns.items = ns.items + [dict(s.state | from_json, slot=(s.entity_id.split('_')[-1] | int))] %}
+            {% endfor %}
+            {{ ns.items | sort(attribute='slot') }}
+
+      - name: "Tesla Departure Schedules"
+        unique_id: tesla_ble_departure_schedules
+        icon: mdi:car-clock
+        state: >
+          {{ states.sensor
+             | selectattr('entity_id', 'match', 'sensor\..*_departure_schedule_slot_\d+$')
+             | selectattr('state', 'match', '\{')
+             | list | count }}
+        attributes:
+          schedules: >
+            {% set ns = namespace(items=[]) %}
+            {% for s in states.sensor
+                 if s.entity_id is match('sensor\..*_departure_schedule_slot_\d+$')
+                 and s.state is match('\{') %}
+              {% set ns.items = ns.items + [dict(s.state | from_json, slot=(s.entity_id.split('_')[-1] | int))] %}
+            {% endfor %}
+            {{ ns.items | sort(attribute='slot') }}

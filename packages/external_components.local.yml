@@ -1,0 +1,5 @@
+# Components from an unpacked local copy of this repository (see repository.yml).
+- components: [tesla_ble_vehicle, tesla_ble_listener]
+  source:
+    type: local
+    path: ${tesla_ble_local_path}/components

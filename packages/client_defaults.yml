@@ -6,3 +6,5 @@ substitutions:
   infotainment_poll_interval_awake: "30"
   infotainment_poll_interval_active: "10"
   infotainment_sleep_timeout: "660"  # 11 minutes
+  schedule_poll_interval: "1800"  # charge/departure schedules, seconds (0 = on connect only)
+  schedule_slots: "5"             # JSON slot sensors per schedule type (0-16)

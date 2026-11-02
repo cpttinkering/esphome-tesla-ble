@@ -6,7 +6,7 @@ substitutions:
   board: esp32dev
   variant: esp32
   flash_size: 4MB
-  tesla_ble_ref: main
+  tesla_ble_ref: main  # see packages/repository.yml for all source settings
   ble_mac_address: "A0:B1:C2:D3:E4:F5" # vehicle BLE MAC address
   tesla_vin: "5YJ30123456789ABC" # vehicle VIN
 
@@ -17,6 +17,8 @@ substitutions:
   infotainment_poll_interval_awake: "30"       # Data when awake (range: 10-600s, default: 30s)
   infotainment_poll_interval_active: "10"      # Data when active (range: 5-120s, default: 10s)
   infotainment_sleep_timeout: "660"            # Sleep timeout (range: 60-3600s, default: 11min)
+  schedule_poll_interval: "1800"               # Charge/departure schedules (0 or 60-86400s, default: 30min)
+  schedule_slots: "5"                          # JSON slot sensors per schedule type (0-16, default: 5)
 
 external_components: !include packages/external_components.dashboard.yml
 
@@ -25,4 +27,4 @@ packages:
   client: !include packages/client.yml
 
 dashboard_import:
-  package_import_url: github://yoziru/esphome-tesla-ble/tesla-ble.example.yml@main
+  package_import_url: github://cpttinkering/esphome-tesla-ble/tesla-ble.example.yml@main

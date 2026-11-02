@@ -1,0 +1,6 @@
+# Offline / local variant of tesla-ble-m5stack-atoms3.dashboard.yml.
+# Include this file from your device YAML after unpacking both repositories,
+# see "Offline / local installation" in README.md.
+packages:
+  dashboard: !include packages/dashboard.local.yml
+  device_base: !include boards/m5stack-atoms3.yml

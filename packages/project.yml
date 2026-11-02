@@ -1,7 +1,7 @@
 esphome:
   project:
-    name: yoziru.esphome-tesla-ble
-    version: "2026.10.3"
+    name: ${tesla_ble_project_name}
+    version: "1.0"  # cpttinkering fork, based on upstream 2026.10.3
 
 esp32_ble_tracker:
   scan_parameters:

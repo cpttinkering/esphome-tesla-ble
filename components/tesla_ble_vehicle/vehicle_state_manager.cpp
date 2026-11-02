@@ -1,6 +1,7 @@
 #include "vehicle_state_manager.h"
 #include <state_text.h>
 #include "tesla_ble_vehicle.h"
+#include "schedule_format.h"
 #ifdef USE_API
 #include <esphome/components/api/api_server.h>
 #endif
@@ -290,6 +291,8 @@ void VehicleStateManager::update_charge_state(const CarServer_ChargeState& charg
         publish_text_sensor("charge_limit_reason", "Unknown");
     }
     
+    update_legacy_schedule(charge_state);
+
     // Update charging rate
     if (charge_state.which_optional_charge_rate_mph) {
         const float rate_mph = static_cast<float>(charge_state.optional_charge_rate_mph.charge_rate_mph);
@@ -666,6 +669,148 @@ void VehicleStateManager::update_software_update_state(const CarServer_SoftwareU
                             TeslaBLE::state_text::software_update_status(update_state.status.which_type));
     }
     publish_text_sensor("software_update_version", version);
+}
+
+// =============================================================================
+// Schedules
+// =============================================================================
+
+// Legacy single schedule ("Scheduled Charging" / "Scheduled Departure"),
+// reported inside every ChargeState. Cars on the newer multi-schedule UI
+// typically report Off here.
+void VehicleStateManager::update_legacy_schedule(const CarServer_ChargeState& charge_state) {
+    namespace fmt = schedule_format;
+    if (charge_state.which_optional_scheduled_charging_mode) {
+        const char* mode = "Unknown";
+        switch (charge_state.optional_scheduled_charging_mode.scheduled_charging_mode) {
+            case CarServer_ChargeState_ScheduledChargingMode_ScheduledChargingModeOff: mode = "Off"; break;
+            case CarServer_ChargeState_ScheduledChargingMode_ScheduledChargingModeStartAt: mode = "Start at"; break;
+            case CarServer_ChargeState_ScheduledChargingMode_ScheduledChargingModeDepartBy: mode = "Depart by"; break;
+        }
+        publish_text_sensor("legacy_scheduled_charging_mode", mode);
+    }
+    if (charge_state.which_optional_scheduled_charging_start_time_minutes) {
+        publish_text_sensor("legacy_scheduled_charging_start_time",
+            fmt::hhmm(static_cast<int32_t>(charge_state.optional_scheduled_charging_start_time_minutes.scheduled_charging_start_time_minutes)));
+    }
+    if (charge_state.which_optional_scheduled_charging_pending) {
+        publish_binary_sensor("legacy_scheduled_charging_pending",
+                              charge_state.optional_scheduled_charging_pending.scheduled_charging_pending);
+    }
+    if (charge_state.which_optional_scheduled_departure_time_minutes) {
+        publish_text_sensor("legacy_scheduled_departure_time",
+            fmt::hhmm(static_cast<int32_t>(charge_state.optional_scheduled_departure_time_minutes.scheduled_departure_time_minutes)));
+    }
+    if (charge_state.which_optional_preconditioning_enabled) {
+        publish_binary_sensor("legacy_departure_preconditioning",
+                              charge_state.optional_preconditioning_enabled.preconditioning_enabled);
+    }
+    if (charge_state.has_preconditioning_times) {
+        const auto tag = charge_state.preconditioning_times.which_times;
+        publish_text_sensor("legacy_departure_preconditioning_days",
+            tag == CarServer_PreconditioningTimes_weekdays_tag ? "Weekdays" :
+            tag == CarServer_PreconditioningTimes_all_week_tag ? "Every day" : fmt::NONE);
+    }
+    if (charge_state.has_off_peak_charging_times) {
+        const auto tag = charge_state.off_peak_charging_times.which_times;
+        publish_text_sensor("legacy_off_peak_charging_days",
+            tag == CarServer_OffPeakChargingTimes_weekdays_tag ? "Weekdays" :
+            tag == CarServer_OffPeakChargingTimes_all_week_tag ? "Every day" : fmt::NONE);
+    }
+    if (charge_state.which_optional_off_peak_hours_end_time) {
+        publish_text_sensor("legacy_off_peak_hours_end_time",
+            fmt::hhmm(static_cast<int32_t>(charge_state.optional_off_peak_hours_end_time.off_peak_hours_end_time)));
+    }
+}
+
+void VehicleStateManager::update_charge_schedules(const TeslaBLE::ChargeScheduleList& list) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating charge schedules (%u)", static_cast<unsigned>(list.schedules.size()));
+    charge_schedules_ = list;
+    has_charge_schedules_ = true;
+    publish_charge_schedules_();
+}
+
+void VehicleStateManager::update_departure_schedules(const TeslaBLE::PreconditionScheduleList& list) {
+    ESP_LOGD(STATE_MANAGER_TAG, "Updating departure schedules (%u)", static_cast<unsigned>(list.schedules.size()));
+    departure_schedules_ = list;
+    has_departure_schedules_ = true;
+    publish_departure_schedules_();
+}
+
+void VehicleStateManager::set_schedule_location_privacy(bool enabled) {
+    if (schedule_location_privacy_ == enabled) {
+        return;
+    }
+    schedule_location_privacy_ = enabled;
+    ESP_LOGI(STATE_MANAGER_TAG, "Schedule location privacy %s", enabled ? "ON (locations hidden)" : "OFF (locations published)");
+    // Re-render cached schedules so the change takes effect immediately.
+    if (has_charge_schedules_) publish_charge_schedules_();
+    if (has_departure_schedules_) publish_departure_schedules_();
+}
+
+void VehicleStateManager::publish_schedule_slot_(const std::string& prefix, size_t index, const std::string& json,
+                                                 bool present) {
+    const std::string id = prefix + std::to_string(index + 1);
+    if (present && json.empty()) {
+        ESP_LOGE(STATE_MANAGER_TAG, "Schedule slot %s does not fit in %u characters - left empty",
+                 id.c_str(), static_cast<unsigned>(schedule_format::MAX_STATE_LENGTH));
+    }
+    publish_text_sensor(id, json);
+}
+
+void VehicleStateManager::publish_charge_schedules_() {
+    namespace fmt = schedule_format;
+    const auto& list = charge_schedules_;
+    const bool with_location = !schedule_location_privacy_;
+
+    publish_sensor("charge_schedule_count", static_cast<float>(list.schedules.size()));
+    publish_text_sensor("charge_schedule_summary", fmt::charge_summary(list));
+
+    const auto& w = list.window;
+    publish_text_sensor("charge_schedule_next_name", list.has_window ? fmt::display_name(w.name) : fmt::NONE);
+    publish_text_sensor("charge_schedule_next_start",
+                        list.has_window && w.start_enabled ? fmt::hhmm(w.start_time) : fmt::NONE);
+    publish_text_sensor("charge_schedule_next_end",
+                        list.has_window && w.end_enabled ? fmt::hhmm(w.end_time) : fmt::NONE);
+    publish_text_sensor("charge_schedule_next_days",
+                        list.has_window ? fmt::day_text(w.days_of_week, w.one_time) : fmt::NONE);
+    publish_binary_sensor("charge_schedule_next_enabled", list.has_window && w.enabled);
+
+    if (list.schedules.size() > charge_schedule_slots_) {
+        ESP_LOGW(STATE_MANAGER_TAG, "%u charge schedules but only %u slots configured - increase schedule_slots",
+                 static_cast<unsigned>(list.schedules.size()), static_cast<unsigned>(charge_schedule_slots_));
+    }
+    for (size_t i = 0; i < charge_schedule_slots_; ++i) {
+        const bool present = i < list.schedules.size();
+        publish_schedule_slot_("charge_schedule_slot_", i,
+                               present ? fmt::charge_json(list.schedules[i], with_location) : "", present);
+    }
+}
+
+void VehicleStateManager::publish_departure_schedules_() {
+    namespace fmt = schedule_format;
+    const auto& list = departure_schedules_;
+    const bool with_location = !schedule_location_privacy_;
+
+    publish_sensor("departure_schedule_count", static_cast<float>(list.schedules.size()));
+    publish_text_sensor("departure_schedule_summary", fmt::departure_summary(list));
+
+    const auto& w = list.window;
+    publish_text_sensor("departure_schedule_next_name", list.has_window ? fmt::display_name(w.name) : fmt::NONE);
+    publish_text_sensor("departure_schedule_next_time", list.has_window ? fmt::hhmm(w.precondition_time) : fmt::NONE);
+    publish_text_sensor("departure_schedule_next_days",
+                        list.has_window ? fmt::day_text(w.days_of_week, w.one_time) : fmt::NONE);
+    publish_binary_sensor("departure_schedule_next_enabled", list.has_window && w.enabled);
+
+    if (list.schedules.size() > departure_schedule_slots_) {
+        ESP_LOGW(STATE_MANAGER_TAG, "%u departure schedules but only %u slots configured - increase schedule_slots",
+                 static_cast<unsigned>(list.schedules.size()), static_cast<unsigned>(departure_schedule_slots_));
+    }
+    for (size_t i = 0; i < departure_schedule_slots_; ++i) {
+        const bool present = i < list.schedules.size();
+        publish_schedule_slot_("departure_schedule_slot_", i,
+                               present ? fmt::departure_json(list.schedules[i], with_location) : "", present);
+    }
 }
 
 void VehicleStateManager::update_asleep(bool asleep) {    if (publish_binary_sensor("asleep", asleep)) {

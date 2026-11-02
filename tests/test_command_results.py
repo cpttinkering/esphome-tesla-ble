@@ -111,6 +111,7 @@ struct TeslaBLEVehicle : Platform {
   int last_vcsec_poll_ = 0;
   PollPolicy poll_policy_;
   bool initial_poll_sent_ = false;
+  bool schedule_poll_sent_ = false;
   void handle_command_result(const std::string &, TeslaBLE::OperationResult);
   void handle_key_not_paired();
   void handle_connection_established();
