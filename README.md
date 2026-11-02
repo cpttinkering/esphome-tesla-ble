@@ -5,7 +5,7 @@
 > Adds read-only charge and departure schedules (see [Schedules](#charge-and-departure-schedules)),
 > configurable source repositories ([`packages/repository.yml`](./packages/repository.yml)) and an
 > [offline / local installation](#offline--local-installation). Requires the matching
-> [cpttinkering/tesla-ble](https://github.com/cpttinkering/tesla-ble) library (v6.4+).
+> [cpttinkering/tesla-ble](https://github.com/cpttinkering/tesla-ble) library (v6.5+).
 
 > [!TIP]
 > **Using Home Assistant?** [Tesla BLE for Home Assistant](https://github.com/yoziru/ha-tesla-ble)
@@ -115,7 +115,7 @@ substitutions:
   tesla_ble_ref: main                                                    # this repository: branch, tag or SHA
   tesla_ble_repo_url: https://github.com/cpttinkering/esphome-tesla-ble.git
   tesla_ble_library_url: https://github.com/cpttinkering/tesla-ble.git
-  tesla_ble_library_ref: v6.4                                            # library: tag or SHA
+  tesla_ble_library_ref: v6.5                                            # library: tag or SHA
 ```
 
 The one reference you write yourself is the `url:` of the remote package in your device
@@ -323,6 +323,11 @@ schedules:
   - {slot: 1, id: 1700000000, name: Home night, days: "Mon,Tue,Wed,Thu,Fri",
      start: "23:00", end: "07:00", one_time: false, enabled: true}
 ```
+
+The slot sensors show raw JSON on the device page. ESPHome cannot mark entities as hidden,
+so hide them once in Home Assistant (**Settings → Entities**, search "schedule slot", select
+all, **Hide**); hidden entities keep updating, and the setting survives reflashing. Do not
+disable them: disabled entities get no state and the merged entities would stay empty.
 
 Departure schedules use `departure: "07:45"` instead of `start`/`end`. With the privacy
 switch off, `lat`/`lon` are added; schedule names can still reveal places.

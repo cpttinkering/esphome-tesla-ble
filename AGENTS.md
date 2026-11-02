@@ -13,7 +13,7 @@ ESPHome component for Tesla BLE vehicle control using ESP32 boards (M5Stack Nano
 - tesla_ble_vehicle: Main vehicle control (sensors, switches, charging, climate, locks)
 - tesla_ble_listener: BLE vehicle discovery (find MAC address by VIN)
 
-External Tesla BLE library (cpttinkering/tesla-ble fork, v6.4+) provides low-level BLE protocol implementation.
+External Tesla BLE library (cpttinkering/tesla-ble fork, v6.5+) provides low-level BLE protocol implementation.
 Source locations (repo URLs, refs, local paths) live only in packages/repository.yml.
 Session keys stored in ESP NVS flash.
 

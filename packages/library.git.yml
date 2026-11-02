@@ -1,5 +1,5 @@
 # Shared tesla-ble library fetched from git (see repository.yml).
-# Requires tesla-ble v6.4+ (charge / departure schedule state).
+# Requires tesla-ble v6.5+ (charge / departure schedule state).
 esp32:
   framework:
     components:

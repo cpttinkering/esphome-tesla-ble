@@ -10,7 +10,7 @@ substitutions:
   tesla_ble_ref: main
   # Shared C++ protocol library (ESP-IDF component).
   tesla_ble_library_url: https://github.com/cpttinkering/tesla-ble.git
-  tesla_ble_library_ref: v6.4
+  tesla_ble_library_ref: v6.5
   # Offline / local builds (packages/dashboard.local.yml): unpacked copies of
   # both repositories. Absolute paths; the defaults match the Home Assistant
   # ESPHome add-on, where your device YAML lives in /config/esphome.

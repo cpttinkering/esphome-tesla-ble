@@ -3,6 +3,22 @@
 Versions use MAJOR.MINOR. 1.0 is based on upstream
 [yoziru/esphome-tesla-ble](https://github.com/yoziru/esphome-tesla-ble) 2026.10.3.
 
+## 1.1
+
+### Fixed
+
+- Crash (stack overflow in loopTask) when schedules were received. Needs the
+  tesla-ble library 6.5, which decodes schedule responses outside the deep
+  message handler.
+
+### Configuration changes (review on upgrade)
+
+| Substitution | Old default | New default |
+|---|---|---|
+| `tesla_ble_library_ref` | `v6.4` | `v6.5` |
+
+Offline builds: replace the `tesla-ble/` folder with the 6.5 copy.
+
 ## 1.0
 
 ### Added
