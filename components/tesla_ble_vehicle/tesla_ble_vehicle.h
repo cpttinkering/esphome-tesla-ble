@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <functional>
 #include <esphome/components/ble_client/ble_client.h>
@@ -196,6 +197,7 @@ private:
     // Connection handlers
     void handle_connection_established();
     void handle_connection_lost();
+    void handle_vehicle_status(const VCSEC_VehicleStatus &status);
 
     // Adapters & Managers
     std::shared_ptr<BleAdapterImpl> ble_adapter_;
@@ -219,13 +221,22 @@ private:
     bool schedule_poll_sent_{false};
     bool charge_schedules_received_{false};
     bool departure_schedules_received_{false};
-    void maybe_poll_schedules_(uint32_t now);
+    void maybe_poll_schedules_(uint32_t now, bool is_asleep);
     void poll_schedules_(TeslaBLE::WakePolicy wake_policy, uint32_t now);
 
     // Polling state
     uint32_t last_vcsec_poll_{0};
     TeslaBLE::InfotainmentPollPolicy poll_policy_;
-    bool initial_poll_sent_{false};
+    bool probe_started_{false};
+    bool was_asleep_{false};
+    bool vehicle_status_known_{false};
+    uint32_t last_vehicle_status_{0};
+    uint32_t last_probe_{0};
+    bool probe_poll_pending_{false};
+    std::optional<uint32_t> last_charge_state_;
+    std::optional<uint32_t> last_closures_state_;
+    bool charge_port_known_{false};
+    bool charge_port_open_{false};
     bool key_rejected_{false};
     binary_sensor::BinarySensor *pairing_required_sensor_{nullptr};
     ConnectionResetPolicy connection_reset_policy_;

@@ -1,7 +1,31 @@
 # Changelog (cpttinkering fork)
 
-Versions use MAJOR.MINOR. 1.0 is based on upstream
-[yoziru/esphome-tesla-ble](https://github.com/yoziru/esphome-tesla-ble) 2026.10.3.
+Versions use MAJOR.MINOR. 2.0 is based on upstream
+[yoziru/esphome-tesla-ble](https://github.com/yoziru/esphome-tesla-ble) 2026.10.4
+(1.x on 2026.10.3).
+
+## 2.0
+
+### Changed
+
+- Merged upstream 2026.10.4. Main behaviour change from upstream: after a
+  (re)connect, the car's status is requested first, and a fresh "awake"
+  report opens a bounded three-minute window of awake-cadence data polling
+  (shared eleven-minute cooldown). Automatic polling still never wakes the car.
+- Requires the cpttinkering tesla-ble library 7.0 (upstream 6.4.0 merged; the
+  fork's schedule-list API renamed so upstream's stays unchanged).
+- Schedule polling uses the same fresh-status "awake" test as data polling.
+- Host tests: the native component test (from upstream) now also builds the
+  schedule code; its switch stub supports restore-mode lookups.
+
+### Configuration changes (review on upgrade)
+
+| Substitution | Old default | New default |
+|---|---|---|
+| `tesla_ble_library_ref` | `v6.5` | `v7.0` |
+
+Offline builds: replace both folders (`esphome-tesla-ble/`, `tesla-ble/`)
+with the 2.0 / 7.0 copies. Nothing to change in your device YAML.
 
 ## 1.1
 

@@ -1,5 +1,6 @@
 # Shared tesla-ble library from an unpacked local copy (see repository.yml).
-# Requires tesla-ble v6.5+ (charge / departure schedule state).
+# Requires the cpttinkering tesla-ble fork 7.0+ (schedule lists, and
+# upstream 6.4.0 bounded awake probes).
 esp32:
   framework:
     components:
