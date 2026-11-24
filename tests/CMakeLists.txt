@@ -14,3 +14,15 @@ target_compile_options(test_command_results PRIVATE -Wall -Wextra)
 set_source_files_properties(test_command_results.cpp PROPERTIES COMPILE_OPTIONS -fno-access-control)
 target_include_directories(test_command_results PRIVATE host ../components/tesla_ble_vehicle)
 target_link_libraries(test_command_results PRIVATE TeslaBLE)
+
+# cpttinkering fork: arrival refresh end-to-end (same harness as above)
+add_executable(test_arrival_refresh_native
+  test_arrival_refresh_native.cpp
+  host/platform.cpp
+  ../components/tesla_ble_vehicle/tesla_ble_vehicle.cpp
+  ../components/tesla_ble_vehicle/vehicle_state_manager.cpp)
+target_compile_features(test_arrival_refresh_native PRIVATE cxx_std_23)
+target_compile_options(test_arrival_refresh_native PRIVATE -Wall -Wextra)
+set_source_files_properties(test_arrival_refresh_native.cpp PROPERTIES COMPILE_OPTIONS -fno-access-control)
+target_include_directories(test_arrival_refresh_native PRIVATE host ../components/tesla_ble_vehicle)
+target_link_libraries(test_arrival_refresh_native PRIVATE TeslaBLE)

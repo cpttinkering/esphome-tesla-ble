@@ -107,6 +107,10 @@ CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
 # Schedule configuration constants
 CONF_SCHEDULE_POLL_INTERVAL = "schedule_poll_interval"  # seconds, 0 = on connect only
 CONF_SCHEDULE_SLOTS = "schedule_slots"  # JSON slot sensors per schedule type
+# Arrival refresh constants (see arrival_refresh_policy.h)
+CONF_REFRESH_MAX_AGE = "refresh_max_age"  # seconds; data older than this is re-read on connect / wake (0 = off)
+CONF_REFRESH_RETRY_MAX_INTERVAL = "refresh_retry_max_interval"  # seconds; back-off cap between attempts
+CONF_REFRESH_MAX_ATTEMPTS = "refresh_max_attempts"  # attempts before giving up until the next connect / wake
 DEFAULT_SCHEDULE_POLL_INTERVAL = 1800
 DEFAULT_SCHEDULE_SLOTS = 5
 MAX_SCHEDULE_SLOTS = 16  # matches TeslaBLE::MAX_SCHEDULES
@@ -389,6 +393,11 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_SCHEDULE_POLL_INTERVAL, default=DEFAULT_SCHEDULE_POLL_INTERVAL): cv.Any(
                 cv.one_of(0, int=True), cv.int_range(min=60, max=86400)),
             cv.Optional(CONF_SCHEDULE_SLOTS, default=DEFAULT_SCHEDULE_SLOTS): cv.int_range(min=0, max=MAX_SCHEDULE_SLOTS),
+            # Arrival refresh (seconds; refresh_max_age 0 = off)
+            cv.Optional(CONF_REFRESH_MAX_AGE, default=600): cv.Any(
+                cv.one_of(0, int=True), cv.int_range(min=60, max=86400)),
+            cv.Optional(CONF_REFRESH_RETRY_MAX_INTERVAL, default=120): cv.int_range(min=20, max=3600),
+            cv.Optional(CONF_REFRESH_MAX_ATTEMPTS, default=10): cv.int_range(min=1, max=50),
         },
     )
     .extend(cv.polling_component_schema("10s"))
@@ -597,6 +606,9 @@ async def to_code(config):
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
     cg.add(var.set_schedule_poll_interval(config[CONF_SCHEDULE_POLL_INTERVAL] * 1000))
     cg.add(var.set_schedule_slots(config[CONF_SCHEDULE_SLOTS]))
+    cg.add(var.set_refresh_max_age(config[CONF_REFRESH_MAX_AGE] * 1000))
+    cg.add(var.set_refresh_retry_max_interval(config[CONF_REFRESH_RETRY_MAX_INTERVAL] * 1000))
+    cg.add(var.set_refresh_max_attempts(config[CONF_REFRESH_MAX_ATTEMPTS]))
     
     for creators in (
         (BINARY_SENSORS, create_binary_sensor),

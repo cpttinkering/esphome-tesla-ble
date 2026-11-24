@@ -27,6 +27,7 @@
 #include <polling_policy.h>
 #include <vehicle.h>
 #include "vehicle_state_manager.h"
+#include "arrival_refresh_policy.h"
 
 namespace esphome {
 namespace tesla_ble_vehicle {
@@ -87,6 +88,10 @@ public:
     void set_infotainment_sleep_timeout(uint32_t interval_ms);
     // Charge / departure schedules: 0 = poll only on connect (and Force update)
     void set_schedule_poll_interval(uint32_t interval_ms);
+    // Arrival refresh: success-checked full read on connect / wake when data is stale
+    void set_refresh_max_age(uint32_t ms) { arrival_refresh_.set_max_age_ms(ms); }
+    void set_refresh_retry_max_interval(uint32_t ms) { arrival_refresh_.set_retry_max_interval_ms(ms); }
+    void set_refresh_max_attempts(uint8_t attempts) { arrival_refresh_.set_max_attempts(attempts); }
     void set_schedule_slots(int slots);
 
     // ==========================================================================
@@ -215,6 +220,12 @@ private:
     // Schedule polling (read-only). Schedules change rarely; polls never wake
     // the car and are retried every SCHEDULE_RETRY_MS until a reply arrives.
     static constexpr uint32_t SCHEDULE_RETRY_MS = 60000;
+
+    // Arrival refresh (see arrival_refresh_policy.h)
+    ArrivalRefreshPolicy arrival_refresh_;
+    void arrival_refresh_trigger_(const char *reason);
+    void arrival_refresh_data_(uint8_t group);
+    void run_arrival_refresh_(uint32_t now, bool is_asleep, bool regular_polled);
     TeslaScheduleLocationPrivacySwitch *schedule_location_privacy_switch_{nullptr};
     uint32_t schedule_poll_interval_{1800000};
     uint32_t last_schedule_poll_{0};

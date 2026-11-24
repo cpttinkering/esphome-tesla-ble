@@ -5,6 +5,7 @@ substitutions:
 
 packages:
   repository: !include repository.yml
+  fork_defaults: !include fork_defaults.yml
   board: !include board.yml
   library: !include library.git.yml
   common: !include common.yml

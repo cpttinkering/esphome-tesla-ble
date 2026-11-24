@@ -88,7 +88,7 @@ TESLA_BLE_DIR ?= ../tesla-ble
 NATIVE_TEST_BUILD_DIR := $(TEST_BUILD_DIR)/native
 
 # Standalone policy tests compile to their own binaries; the component uses CMake.
-TEST_SRCS := $(filter-out $(TEST_DIR)/test_command_results.cpp,$(wildcard $(TEST_DIR)/test_*.cpp))
+TEST_SRCS := $(filter-out $(TEST_DIR)/test_command_results.cpp $(TEST_DIR)/test_arrival_refresh_native.cpp,$(wildcard $(TEST_DIR)/test_*.cpp))
 TEST_BINS := $(patsubst $(TEST_DIR)/%.cpp,$(TEST_BUILD_DIR)/%,$(TEST_SRCS))
 # Rebuild all test binaries when any component header or the shared harness changes.
 TEST_HEADERS := $(wildcard components/tesla_ble_vehicle/*.h) $(TEST_DIR)/test_helper.h
@@ -110,6 +110,8 @@ test-native: ## Compile and run the production component against host platform s
 	cmake -S $(TEST_DIR) -B $(NATIVE_TEST_BUILD_DIR) -DTESLA_BLE_DIR=$(abspath $(TESLA_BLE_DIR)) -DCMAKE_CXX_COMPILER="$(CXX)"
 	cmake --build $(NATIVE_TEST_BUILD_DIR) --target test_command_results -j 2
 	$(NATIVE_TEST_BUILD_DIR)/test_command_results
+	cmake --build $(NATIVE_TEST_BUILD_DIR) --target test_arrival_refresh_native -j 2
+	$(NATIVE_TEST_BUILD_DIR)/test_arrival_refresh_native
 
 test-python: ## Run the Python codegen and charging-power checks
 	python3 $(TEST_DIR)/test_codegen.py

@@ -17,8 +17,12 @@ substitutions:
   infotainment_poll_interval_awake: "30"       # Data when awake (range: 10-600s, default: 30s)
   infotainment_poll_interval_active: "10"      # Data when active (range: 5-120s, default: 10s)
   infotainment_sleep_timeout: "660"            # Sleep timeout (range: 60-3600s, default: 11min)
-  schedule_poll_interval: "1800"               # Charge/departure schedules (0 or 60-86400s, default: 30min)
-  schedule_slots: "5"                          # JSON slot sensors per schedule type (0-16, default: 5)
+  # Fork settings - defaults live in packages/fork_defaults.yml; uncomment to override:
+  # schedule_poll_interval: "1800"             # Charge/departure schedules (0 or 60-86400s)
+  # schedule_slots: "5"                        # JSON slot sensors per schedule type (0-16)
+  # refresh_max_age: "600"                     # Arrival refresh: re-read data older than this (0 = off, 60-86400s)
+  # refresh_retry_max_interval: "120"          # Arrival refresh: back-off cap (20-3600s)
+  # refresh_max_attempts: "10"                 # Arrival refresh: attempts before giving up (1-50)
 
 external_components: !include packages/external_components.dashboard.yml
 

@@ -20,6 +20,11 @@ tesla_ble_vehicle:
   schedule_poll_interval: $schedule_poll_interval  # Re-read interval; also read on every (re)connect
   schedule_slots: $schedule_slots                  # Per-schedule JSON slot sensors for Home Assistant
 
+  # Arrival refresh: success-checked full read on connect / wake (never wakes the car)
+  refresh_max_age: $refresh_max_age                        # Re-read data older than this (s, 0 = off)
+  refresh_retry_max_interval: $refresh_retry_max_interval  # Back-off cap between attempts (s)
+  refresh_max_attempts: $refresh_max_attempts              # Attempts before giving up until next connect / wake
+
 # BLE sensors from the standard ble_client platform
 sensor:
   - platform: ble_client

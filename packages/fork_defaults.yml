@@ -1,0 +1,12 @@
+# Defaults for the cpttinkering fork's own settings - the single place they
+# are declared. Override any of them in your device YAML's `substitutions:`
+# (top-level substitutions always win over package defaults).
+substitutions:
+  # Charge / departure schedules (read-only, never wake the car)
+  schedule_poll_interval: "1800"      # seconds between reads; 0 = on connect / Force update only
+  schedule_slots: "5"                 # JSON slot sensors per schedule type (0-16)
+  # Arrival refresh: on BLE connect or wake-up, data older than refresh_max_age
+  # is read in full and retried until every data group has arrived
+  refresh_max_age: "600"              # seconds; 0 = off, else 60-86400
+  refresh_retry_max_interval: "120"   # seconds; retries 20 s, 40 s, 80 s, then this (20-3600)
+  refresh_max_attempts: "10"          # then gives up until the next connect / wake-up (1-50)

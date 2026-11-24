@@ -58,6 +58,7 @@ class ArrivalRefreshPolicy {
   uint8_t max_attempts() const { return max_attempts_; }
   bool armed() const { return armed_; }
   uint8_t missing() const { return armed_ ? missing_ : 0; }
+  uint8_t attempts() const { return attempts_; }
 
   // A data group arrived (from any poll). Returns true when this completes an
   // armed refresh.
@@ -150,7 +151,7 @@ class ArrivalRefreshPolicy {
   }
 
  private:
-  uint32_t max_age_ms_{600000};
+  uint32_t max_age_ms_{0};  // off unless configured (YAML default: 600 s)
   uint32_t first_retry_ms_{20000};
   uint32_t retry_max_interval_ms_{120000};
   uint8_t max_attempts_{10};

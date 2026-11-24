@@ -98,6 +98,7 @@ void TeslaBLEVehicle::initialize_managers() {
 
   vehicle_->set_charge_state_callback([this](const CarServer_ChargeState &s) {
     last_charge_state_ = millis();
+    arrival_refresh_data_(REFRESH_CHARGE);
     state_manager_.update_charge_state(s);
 #if __has_include(<charging_power.h>)
     state_manager_.update_charging_power(vehicle_->charging_power());
@@ -105,21 +106,25 @@ void TeslaBLEVehicle::initialize_managers() {
   });
 
   vehicle_->set_climate_state_callback([this](const CarServer_ClimateState &s) {
+    arrival_refresh_data_(REFRESH_CLIMATE);
     state_manager_.update_climate_state(s);
   });
 
   vehicle_->set_drive_state_callback([this](const CarServer_DriveState &s) {
+    arrival_refresh_data_(REFRESH_DRIVE);
     state_manager_.update_drive_state(s);
   });
 
   vehicle_->set_tire_pressure_state_callback(
       [this](const CarServer_TirePressureState &s) {
+        arrival_refresh_data_(REFRESH_TIRES);
         state_manager_.update_tire_pressure_state(s);
       });
 
   vehicle_->set_closures_state_callback(
       [this](const CarServer_ClosuresState &s) {
         last_closures_state_ = millis();
+        arrival_refresh_data_(REFRESH_CLOSURES);
         state_manager_.update_closures_state(s);
       });
 
@@ -157,6 +162,9 @@ void TeslaBLEVehicle::handle_vehicle_status(const VCSEC_VehicleStatus &s) {
     probe_poll_pending_ = true;
     probe_started_ = true;
     last_probe_ = now;
+  }
+  if (vehicle_status_known_ && was_asleep_ && asleep.has_value() && !asleep.value()) {
+    arrival_refresh_trigger_("car woke up");
   }
   was_asleep_ = !asleep.has_value() || asleep.value();
   vehicle_status_known_ = asleep.has_value();
@@ -239,15 +247,101 @@ void TeslaBLEVehicle::update() {
               now - *last_closures_state_ <= active_freshness_ms &&
               state_manager_.is_sentry_mode());
 
+  bool regular_polled = false;
   if (!is_asleep && (probe_poll_pending_ || poll_policy_.should_poll(now, decision.interval_ms))) {
     ESP_LOGI(TAG, "Polling Infotainment (NO_WAKE_SKIP, interval=%" PRIu32 "ms%s)", decision.interval_ms,
              probe_poll_pending_ ? ", awake probe" : "");
     vehicle_->infotainment_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     poll_policy_.on_poll(now);
     probe_poll_pending_ = false;
+    regular_polled = true;
   }
 
+  run_arrival_refresh_(now, is_asleep, regular_polled);
+
   maybe_poll_schedules_(now, is_asleep);
+}
+
+// =============================================================================
+// Arrival refresh
+// =============================================================================
+// On BLE connect or wake-up, stale data (older than refresh_max_age) arms one
+// success-checked full read; see arrival_refresh_policy.h. It never wakes the
+// car: attempts wait for a fresh "awake" status, and retries back off.
+
+namespace {
+std::string refresh_group_names(uint8_t groups) {
+  static const char *const NAMES[REFRESH_GROUP_COUNT] = {"charge", "climate", "drive", "closures", "tires"};
+  std::string out;
+  for (uint8_t i = 0; i < REFRESH_GROUP_COUNT; ++i) {
+    if (groups & (1 << i)) {
+      if (!out.empty())
+        out += ',';
+      out += NAMES[i];
+    }
+  }
+  return out;
+}
+}  // namespace
+
+void TeslaBLEVehicle::arrival_refresh_trigger_(const char *reason) {
+  const uint32_t now = millis();
+  const uint32_t age = arrival_refresh_.data_age_ms(now);
+  switch (arrival_refresh_.on_trigger(now)) {
+    case ArrivalRefreshPolicy::TriggerResult::ARMED:
+      if (age == UINT32_MAX) {
+        ESP_LOGI(TAG, "Arrival refresh (%s): no complete data yet - full read when awake", reason);
+      } else {
+        ESP_LOGI(TAG, "Arrival refresh (%s): data %" PRIu32 " min old - full read when awake", reason,
+                 age / 60000);
+      }
+      break;
+    case ArrivalRefreshPolicy::TriggerResult::RESUMED:
+      ESP_LOGI(TAG, "Arrival refresh (%s): resuming, still missing: %s", reason,
+               refresh_group_names(arrival_refresh_.missing()).c_str());
+      break;
+    case ArrivalRefreshPolicy::TriggerResult::FRESH:
+      break;
+  }
+}
+
+void TeslaBLEVehicle::arrival_refresh_data_(uint8_t group) {
+  if (arrival_refresh_.on_data(group, millis())) {
+    ESP_LOGI(TAG, "Arrival refresh complete after %u attempt(s)",
+             static_cast<unsigned>(arrival_refresh_.attempts()));
+  }
+}
+
+void TeslaBLEVehicle::run_arrival_refresh_(uint32_t now, bool is_asleep, bool regular_polled) {
+  if (regular_polled)
+    arrival_refresh_.on_regular_poll(now);
+  const auto action = arrival_refresh_.poll_due(now, !is_asleep);
+  switch (action.type) {
+    case ArrivalRefreshPolicy::ActionType::POLL: {
+      ESP_LOGI(TAG, "Arrival refresh attempt %u/%u: requesting %s", static_cast<unsigned>(action.attempt),
+               static_cast<unsigned>(arrival_refresh_.max_attempts()), refresh_group_names(action.groups).c_str());
+      constexpr auto policy = TeslaBLE::WakePolicy::NO_WAKE_SKIP;
+      if (action.groups & REFRESH_CHARGE)
+        vehicle_->charge_state_poll(policy);
+      if (action.groups & REFRESH_CLIMATE)
+        vehicle_->climate_state_poll(policy);
+      if (action.groups & REFRESH_DRIVE)
+        vehicle_->drive_state_poll(policy);
+      if (action.groups & REFRESH_CLOSURES)
+        vehicle_->closures_state_poll(policy);
+      if (action.groups & REFRESH_TIRES)
+        vehicle_->tire_pressure_poll(policy);
+      break;
+    }
+    case ArrivalRefreshPolicy::ActionType::GAVE_UP:
+      // Error level (red in the ESPHome log): data stays stale until the next connect / wake.
+      ESP_LOGE(TAG, "Arrival refresh gave up after %u attempts - no answer for: %s (data stays stale until the "
+                    "next connect or wake-up)",
+               static_cast<unsigned>(action.attempt), refresh_group_names(action.groups).c_str());
+      break;
+    case ArrivalRefreshPolicy::ActionType::NONE:
+      break;
+  }
 }
 
 // Schedules are polled once per connection (as soon as the car is awake) and
@@ -287,6 +381,8 @@ void TeslaBLEVehicle::dump_config() {
                      "ms, Active=%" PRIu32 "ms",
                  vcsec_poll_interval_, poll_policy_.awake_interval_ms(),
                  poll_policy_.active_interval_ms());
+  ESP_LOGCONFIG(TAG, "  Arrival refresh: max age=%" PRIu32 "ms (0 = off), max attempts=%u",
+                arrival_refresh_.max_age_ms(), static_cast<unsigned>(arrival_refresh_.max_attempts()));
   ESP_LOGCONFIG(TAG, "  Schedules: interval=%" PRIu32 "ms (0 = on connect only), location privacy=%s",
                 schedule_poll_interval_, YESNO(state_manager_.schedule_location_privacy()));
 }
@@ -1011,6 +1107,7 @@ void TeslaBLEVehicle::handle_connection_established() {
   if (vehicle_) {
     vehicle_->set_connected(true);
     ESP_LOGI(TAG, "Connection established - triggering initial polls");
+    arrival_refresh_trigger_("connected");
     if (!key_rejected_) {
       vehicle_->vcsec_poll(TeslaBLE::WakePolicy::NO_WAKE_SKIP);
     }
