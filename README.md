@@ -297,6 +297,47 @@ backed off; fresh charging observations can take over the active cadence.
 
 Successful controls refresh the affected state after 1.5 seconds. Repeated controls coalesce that refresh; it does not wake a sleeping car and is cancelled on disconnect.
 
+### Arrival refresh (fork)
+
+<!-- BEGIN arrival refresh -->
+On every BLE connect and every wake-up, the fork checks how old the vehicle data
+is. If the oldest data group (charge, climate, drive, closures, tires) is older
+than `refresh_max_age`, it reads all of them and keeps retrying until every
+group has actually *arrived*: an immediate attempt, then after 20 s, 40 s, 80 s
+and then every `refresh_retry_max_interval`. Retries request only the groups
+still missing, and the refresh stops the moment the last one arrives, so no
+extra requests keep the car awake.
+
+It never wakes the car: attempts wait for a fresh "awake" status. Sleep or a BLE
+drop pauses an unfinished refresh; the next wake-up or connect resumes it. After
+`refresh_max_attempts` attempts it gives up until the next connect or wake-up,
+logging an error (red) that names the groups that never answered.
+
+```yaml
+substitutions:  # defaults, in packages/fork_defaults.yml
+  refresh_max_age: "600"             # seconds; 0 = off
+  refresh_retry_max_interval: "120"  # seconds
+  refresh_max_attempts: "10"
+```
+
+Log lines: `Arrival refresh (connected): data 184 min old - full read when awake`,
+`Arrival refresh attempt 2/10: requesting closures,tires`,
+`Arrival refresh complete after 2 attempt(s)`.
+
+<details>
+<summary>How it works with upstream's polling</summary>
+
+The refresh sits next to upstream's awake probe and idle timer and changes
+neither. "Arrived" is taken from the data callbacks, so answers to upstream's
+regular polls count too: if the probe's first poll succeeds, the refresh is
+complete without a request of its own. A regular poll in the same update tick
+counts as the refresh's attempt (no duplicate request); a regular poll during a
+back-off restarts the wait. The logic is in `arrival_refresh_policy.h`,
+host-tested in `tests/test_arrival_refresh_policy.cpp` and end-to-end in
+`tests/test_arrival_refresh_native.cpp`.
+</details>
+<!-- END arrival refresh -->
+
 ### Charge and departure schedules
 
 Read-only. Schedules are read on every (re)connect as soon as the car is awake, then every
@@ -304,7 +345,7 @@ Read-only. Schedules are read on every (re)connect as soon as the car is awake, 
 poll without a reply is retried after a minute.
 
 ```yaml
-substitutions:
+substitutions:  # defaults, in packages/fork_defaults.yml
   schedule_poll_interval: "1800"  # seconds: 0 (connect/force update only) or 60-86400, default 30 min
   schedule_slots: "5"             # JSON slot sensors per schedule type: 0-16, default 5
 ```

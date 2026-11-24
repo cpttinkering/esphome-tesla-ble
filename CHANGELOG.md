@@ -4,6 +4,38 @@ Versions use MAJOR.MINOR. 2.0 is based on upstream
 [yoziru/esphome-tesla-ble](https://github.com/yoziru/esphome-tesla-ble) 2026.10.4
 (1.x on 2026.10.3).
 
+## 2.1
+
+### Added
+
+- Arrival refresh: on BLE connect or wake-up, data older than
+  `refresh_max_age` is read in full and retried (20 s, 40 s, 80 s, then every
+  `refresh_retry_max_interval`) until every data group has arrived, requesting
+  only missing groups; gives up after `refresh_max_attempts` with an error log
+  until the next connect / wake-up. Never wakes the car; upstream's awake probe
+  and idle timer are unchanged.
+- `packages/fork_defaults.yml`: the single place for the fork's own setting
+  defaults, included by `dashboard.yml`, `dashboard.local.yml` and `base.yml`.
+
+### Changed
+
+- The schedule defaults moved from `dashboard.yml`, `dashboard.local.yml` and
+  `client_defaults.yml` to `fork_defaults.yml` (same values).
+
+### Configuration changes (review on upgrade)
+
+New, all optional; defaults in `packages/fork_defaults.yml`.
+
+| Substitution | Default | Purpose |
+|---|---|---|
+| `refresh_max_age` | `"600"` | Re-read data older than this on connect / wake (s, 0 = off) |
+| `refresh_retry_max_interval` | `"120"` | Back-off cap between attempts (s) |
+| `refresh_max_attempts` | `"10"` | Attempts before giving up until the next connect / wake |
+
+Component keys (CLI / custom configs): `tesla_ble_vehicle.refresh_max_age`,
+`refresh_retry_max_interval`, `refresh_max_attempts`. Offline builds: replace
+the `esphome-tesla-ble/` folder (library unchanged, 7.0).
+
 ## 2.0
 
 ### Changed

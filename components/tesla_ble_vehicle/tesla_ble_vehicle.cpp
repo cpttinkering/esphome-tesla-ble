@@ -270,7 +270,8 @@ void TeslaBLEVehicle::update() {
 // car: attempts wait for a fresh "awake" status, and retries back off.
 
 namespace {
-std::string refresh_group_names(uint8_t groups) {
+// [[maybe_unused]]: only referenced from log macros, which a stricter log level compiles out.
+[[maybe_unused]] std::string refresh_group_names(uint8_t groups) {
   static const char *const NAMES[REFRESH_GROUP_COUNT] = {"charge", "climate", "drive", "closures", "tires"};
   std::string out;
   for (uint8_t i = 0; i < REFRESH_GROUP_COUNT; ++i) {
@@ -284,7 +285,7 @@ std::string refresh_group_names(uint8_t groups) {
 }
 }  // namespace
 
-void TeslaBLEVehicle::arrival_refresh_trigger_(const char *reason) {
+void TeslaBLEVehicle::arrival_refresh_trigger_([[maybe_unused]] const char *reason) {
   const uint32_t now = millis();
   const uint32_t age = arrival_refresh_.data_age_ms(now);
   switch (arrival_refresh_.on_trigger(now)) {
